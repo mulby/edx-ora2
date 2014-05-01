@@ -4,7 +4,6 @@ from mock import patch
 from nose.tools import raises
 
 from openassessment.test_utils import CacheResetTest
-from openassessment.assessment import peer_api
 
 from openassessment.workflow.models import AssessmentWorkflow
 from submissions.models import Submission
@@ -25,11 +24,14 @@ REQUIREMENTS = {
     }
 }
 
+STEPS = ['peer', 'self']
+
+
 class TestAssessmentWorkflowApi(CacheResetTest):
 
     def test_create_workflow(self):
         submission = sub_api.create_submission(ITEM_1, "Shoot Hot Rod")
-        workflow = workflow_api.create_workflow(submission["uuid"])
+        workflow = workflow_api.create_workflow(submission["uuid"], STEPS)
 
         workflow_keys = set(workflow.keys())
         self.assertEqual(
@@ -50,24 +52,24 @@ class TestAssessmentWorkflowApi(CacheResetTest):
     def test_need_valid_submission_uuid(self):
         # submission doesn't exist
         with self.assertRaises(workflow_api.AssessmentWorkflowRequestError):
-            workflow = workflow_api.create_workflow("xxxxxxxxxxx")
+            workflow = workflow_api.create_workflow("xxxxxxxxxxx", STEPS)
 
         # submission_uuid is the wrong type
         with self.assertRaises(workflow_api.AssessmentWorkflowRequestError):
-            workflow = workflow_api.create_workflow(123)
+            workflow = workflow_api.create_workflow(123, STEPS)
 
     @patch.object(Submission.objects, 'get')
     @raises(workflow_api.AssessmentWorkflowInternalError)
     def test_unexpected_submissions_errors_wrapped(self, mock_get):
         mock_get.side_effect = Exception("Kaboom!")
-        workflow_api.create_workflow("zzzzzzzzzzzzzzz")
+        workflow_api.create_workflow("zzzzzzzzzzzzzzz", STEPS)
 
     @patch.object(AssessmentWorkflow.objects, 'create')
     @raises(workflow_api.AssessmentWorkflowInternalError)
     def test_unexpected_workflow_errors_wrapped(self, mock_create):
         mock_create.side_effect = DatabaseError("Kaboom!")
         submission = sub_api.create_submission(ITEM_1, "Ultra Magnus fumble")
-        workflow_api.create_workflow(submission["uuid"])
+        workflow_api.create_workflow(submission["uuid"], STEPS)
 
     def test_get_assessment_workflow_expected_errors(self):
         with self.assertRaises(workflow_api.AssessmentWorkflowNotFoundError):
@@ -80,12 +82,12 @@ class TestAssessmentWorkflowApi(CacheResetTest):
     def test_unexpected_workflow_get_errors_wrapped(self, mock_get):
         mock_get.side_effect = Exception("Kaboom!")
         submission = sub_api.create_submission(ITEM_1, "We talk TV!")
-        workflow = workflow_api.create_workflow(submission["uuid"])
+        workflow = workflow_api.create_workflow(submission["uuid"], STEPS)
         workflow_api.get_workflow_for_submission(workflow["uuid"], REQUIREMENTS)
 
     def test_get_status_counts(self):
         # Initially, the counts should all be zero
-        counts = workflow_api.get_status_counts("test/1/1", "peer-problem")
+        counts = workflow_api.get_status_counts("test/1/1", "peer-problem", ["peer", "self"])
         self.assertEqual(counts, [
             {"status": "peer", "count": 0},
             {"status": "self", "count": 0},
@@ -108,7 +110,7 @@ class TestAssessmentWorkflowApi(CacheResetTest):
         self._create_workflow_with_status("user 10", "test/1/1", "peer-problem", "done")
 
         # Now the counts should be updated
-        counts = workflow_api.get_status_counts("test/1/1", "peer-problem")
+        counts = workflow_api.get_status_counts("test/1/1", "peer-problem", ["peer", "self"])
         self.assertEqual(counts, [
             {"status": "peer", "count": 1},
             {"status": "self", "count": 2},
@@ -119,13 +121,13 @@ class TestAssessmentWorkflowApi(CacheResetTest):
         # Create a workflow in a different course, same user and item
         # Counts should be the same
         self._create_workflow_with_status("user 1", "other_course", "peer-problem", "peer")
-        updated_counts = workflow_api.get_status_counts("test/1/1", "peer-problem")
+        updated_counts = workflow_api.get_status_counts("test/1/1", "peer-problem", ["peer", "self"])
         self.assertEqual(counts, updated_counts)
 
         # Create a workflow in the same course, different item
         # Counts should be the same
         self._create_workflow_with_status("user 1", "test/1/1", "other problem", "peer")
-        updated_counts = workflow_api.get_status_counts("test/1/1", "peer-problem")
+        updated_counts = workflow_api.get_status_counts("test/1/1", "peer-problem", ["peer", "self"])
         self.assertEqual(counts, updated_counts)
 
     def _create_workflow_with_status(self, student_id, course_id, item_id, status, answer="answer"):
@@ -151,7 +153,7 @@ class TestAssessmentWorkflowApi(CacheResetTest):
             "item_type": "openassessment",
         }, answer)
 
-        workflow = workflow_api.create_workflow(submission['uuid'])
+        workflow = workflow_api.create_workflow(submission['uuid'], STEPS)
         workflow_model = AssessmentWorkflow.objects.get(uuid=workflow['uuid'])
         workflow_model.status = status
         workflow_model.save()

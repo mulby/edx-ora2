@@ -87,7 +87,7 @@ def create_workflow(submission_uuid, steps):
         AssessmentWorkflowRequestError: If the `submission_uuid` passed in does
             not exist or is of an invalid type.
         AssessmentWorkflowInternalError: Unexpected internal error, such as the
-            submissions app not being available or a database configuation
+            submissions app not being available or a database configuration
             problem.
 
     """
@@ -316,19 +316,20 @@ def update_from_assessments(submission_uuid, assessment_requirements):
     return _serialized_with_details(workflow, assessment_requirements)
 
 
-def get_status_counts(course_id, item_id):
+def get_status_counts(course_id, item_id, steps):
     """
     Count how many workflows have each status, for a given item in a course.
 
     Kwargs:
         course_id (unicode): The ID of the course.
         item_id (unicode): The ID of the item in the course.
+        steps (list): A list of assessment steps for this problem.
 
     Returns:
         list of dictionaries with keys "status" (str) and "count" (int)
 
     Example usage:
-        >>> get_status_counts("ora2/1/1", "peer-assessment-problem")
+        >>> get_status_counts("ora2/1/1", "peer-assessment-problem", ["peer"])
         [
             {"status": "peer", "count": 5},
             {"status": "self", "count": 10},
@@ -345,7 +346,8 @@ def get_status_counts(course_id, item_id):
                 course_id=course_id,
                 item_id=item_id,
             ).count()
-        } for status in AssessmentWorkflow.STATUS_VALUES
+        }
+        for status in steps + AssessmentWorkflow.STATUSES
     ]
 
 
