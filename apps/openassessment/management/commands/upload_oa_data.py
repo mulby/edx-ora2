@@ -1,6 +1,7 @@
 """
 Generate CSV files for submission and assessment data, then upload to S3.
 """
+import sys
 import os
 import os.path
 import datetime
@@ -27,10 +28,12 @@ class Command(BaseCommand):
     }
 
     URL_EXPIRATION_HOURS = 24
+    PROGRESS_INTERVAL = 10
 
     def __init__(self, *args, **kwargs):
         super(Command, self).__init__(*args, **kwargs)
         self._history = list()
+        self._submission_counter = 0
 
     @property
     def history(self):
@@ -60,7 +63,6 @@ class Command(BaseCommand):
 
         course_id, s3_bucket = args[0].decode('utf-8'), args[1].decode('utf-8')
         csv_dir = tempfile.mkdtemp()
-        archive_path = None
 
         try:
             print u"Generating CSV files for course '{}'".format(course_id)
@@ -72,9 +74,9 @@ class Command(BaseCommand):
             print "== Upload successful =="
             print u"Download URL (expires in {} hours):\n{}".format(self.URL_EXPIRATION_HOURS, url)
         finally:
+            # Assume that the archive was created in the directory,
+            # so to clean up we just need to delete the directory.
             shutil.rmtree(csv_dir)
-            if archive_path is not None and os.path.exists(archive_path):
-                os.remove(archive_path)
 
     def _dump_to_csv(self, course_id, csv_dir):
         """
@@ -91,7 +93,7 @@ class Command(BaseCommand):
             name: open(os.path.join(csv_dir, rel_path), 'w')
             for name, rel_path in self.OUTPUT_CSV_PATHS.iteritems()
         }
-        csv_writer = CsvWriter(output_streams)
+        csv_writer = CsvWriter(output_streams, self._progress_callback)
         csv_writer.write_to_csv(course_id)
 
     def _create_archive(self, dir_path):
@@ -138,3 +140,12 @@ class Command(BaseCommand):
         self._history.append({'key': key_name, 'url': url})
 
         return url
+
+    def _progress_callback(self):
+        """
+        Indicate progress to the user as submissions are processed.
+        """
+        self._submission_counter += 1
+        if self._submission_counter > 0 and self._submission_counter % self.PROGRESS_INTERVAL == 0:
+            sys.stdout.write('.')
+            sys.stdout.flush()

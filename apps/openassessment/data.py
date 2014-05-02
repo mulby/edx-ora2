@@ -48,7 +48,7 @@ class CsvWriter(object):
 
     QUERY_INTERVAL = 100
 
-    def __init__(self, output_streams):
+    def __init__(self, output_streams, progress_callback=None):
         """
         Configure where the writer will write data.
 
@@ -60,6 +60,11 @@ class CsvWriter(object):
         Args:
             output_streams (dictionary): Provide the file handles
                 to write CSV data to.
+
+        Kwargs:
+            progress_callback (callable): Callable that accepts
+                no arguments.  Called once per submission loaded
+                from the database.
 
         Example usage:
             >>> output_streams = {
@@ -75,6 +80,7 @@ class CsvWriter(object):
             for key, file_handle in output_streams.iteritems()
             if key in self.MODELS
         }
+        self._progress_callback = progress_callback
 
     def write_to_csv(self, course_id):
         """
@@ -107,6 +113,9 @@ class CsvWriter(object):
                     option for option in assessment_feedback.options.all()
                 ))
             self._write_feedback_options_to_csv(feedback_option_set)
+
+            if self._progress_callback is not None:
+                self._progress_callback()
 
     def _submission_uuids(self, course_id):
         """

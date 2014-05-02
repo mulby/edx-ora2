@@ -8,6 +8,8 @@ from django.test import TestCase
 import boto
 import moto
 from openassessment.management.commands import upload_oa_data
+from openassessment.workflow import api as workflow_api
+from submissions import api as sub_api
 
 
 class UploadDataTest(TestCase):
@@ -16,7 +18,7 @@ class UploadDataTest(TestCase):
     but the contents of the generated CSV files are tested elsewhere.
     """
 
-    COURSE_ID = u"TɘꙅT ↄoUᴙꙅɘ".encode('utf-8')
+    COURSE_ID = u"TɘꙅT ↄoUᴙꙅɘ"
     BUCKET_NAME = u"com.example.data"
     CSV_NAMES = [
         "assessment.csv", "assessment_part.csv",
@@ -30,11 +32,24 @@ class UploadDataTest(TestCase):
         conn = boto.connect_s3()
         conn.create_bucket(self.BUCKET_NAME)
 
+        # Create some submissions to ensure that we cover
+        # the progress indicator code.
+        for index in range(50):
+            student_item = {
+                'student_id': "test_user_{}".format(index),
+                'course_id': self.COURSE_ID,
+                'item_id': 'test_item',
+                'item_type': 'openassessment',
+            }
+            submission_text = "test submission {}".format(index)
+            submission = sub_api.create_submission(student_item, submission_text)
+            workflow_api.create_workflow(submission['uuid'])
+
         # Create and upload the archive of CSV files
         # This should generate the files even though
         # we don't have any data available.
         cmd = upload_oa_data.Command()
-        cmd.handle(self.COURSE_ID, self.BUCKET_NAME)
+        cmd.handle(self.COURSE_ID.encode('utf-8'), self.BUCKET_NAME)
 
         # Retrieve the uploaded file from the fake S3 implementation
         self.assertEqual(len(cmd.history), 1)
