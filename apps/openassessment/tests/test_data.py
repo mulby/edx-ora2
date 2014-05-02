@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Tests for openassessment data aggregation.
 """
@@ -93,6 +94,18 @@ class CsvWriterTest(CacheResetTest):
             content = output.getvalue()
             rows = content.split('\n')
             self.assertEqual(len(rows), 2)
+
+    def test_unicode(self):
+        # Flush out unicode errors
+        self._load_fixture('db_fixtures/unicode.json')
+        output_streams = self._output_streams(CsvWriter.MODELS)
+        CsvWriter(output_streams).write_to_csv(u"𝓽𝓮𝓼𝓽_𝓬𝓸𝓾𝓻𝓼𝓮")
+
+        # Check that data ended up in the reports
+        for output in output_streams.values():
+            content = output.getvalue()
+            rows = content.split('\n')
+            self.assertGreater(len(rows), 2)
 
     def _output_streams(self, names):
         """
